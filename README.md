@@ -6,7 +6,6 @@ Purpose of this training is to deepen Go development and understanding of the HT
 ## Intro
 
 The HyperText Transfer Protocol (HTTP) is the basis for the „Internet“. 
-
 In this training, we'll implement the still widely supported and used version 1.1, e.g.
 
 ```http

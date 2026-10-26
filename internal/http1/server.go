@@ -18,17 +18,44 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	}
 
 	for {
-		panic("ListenAndServe: Not implemented")
-		/*
-				Functions that might be useful:
-				* listener.Accept()
-			  * HandleConnection()
-		*/
+		conn, err := listener.Accept()
+		if err != nil {
+			return fmt.Errorf("connection: %w", err)
+		}
+
+		//since this is a indefinite loop, we dont want to
+		//block the main processor if one client takes too long
+		//so spin up a go routine for each connection so the
+		//main server stays active
+		go func() {
+			err := HandleConnection(conn, handler)
+			if err != nil {
+				fmt.Printf("Error handling connection: %v\n", err)
+			}
+		}()
 	}
 }
 
 func HandleConnection(conn net.Conn, mux http.Handler) error {
-	panic("HandleConnection: Not Implemented")
+	defer conn.Close()
+
+	buffer := make([]byte, 1024)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		return fmt.Errorf("read %w", err)
+	}
+
+	fmt.Println("\nBuffer slice (dec):")
+	fmt.Println(buffer[:n])
+
+	fmt.Println("\nBuffer slice (hex):")
+	fmt.Printf("% x\n", buffer[:n])
+
+	fmt.Println("\nBuffer slice (string)")
+	fmt.Print(string(buffer[:n]))
+
+	return nil
+
 	/*
 			Functions that might be useful:
 			* ParseRequest()
