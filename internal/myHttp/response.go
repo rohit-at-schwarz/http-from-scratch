@@ -7,8 +7,9 @@ import (
 )
 
 type Response struct {
-	conn   net.Conn
-	header http.Header
+	conn           net.Conn
+	header         http.Header
+	didWriteHeader bool
 }
 
 func NewResponse(conn net.Conn) *Response {
@@ -36,6 +37,11 @@ func (r *Response) Write(data []byte) (n int, err error) {
 //	\r\n
 //	hello
 func (r *Response) WriteHeader(statusCode int) {
+	if r.didWriteHeader {
+		return
+	}
+
+	r.didWriteHeader = true
 	protocol := "HTTP/1.1"
 	statusText := http.StatusText(statusCode)
 	fmt.Fprintf(r.conn, "%s %d %s\r\n", protocol, statusCode, statusText)
