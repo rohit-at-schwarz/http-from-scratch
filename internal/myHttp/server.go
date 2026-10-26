@@ -12,7 +12,12 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	if err != nil {
 		return fmt.Errorf("listen: %w", err)
 	}
-	defer listener.Close()
+	defer func() {
+		err = listener.Close()
+		if err != nil {
+			_ = fmt.Errorf("close listener: %w", err)
+		}
+	}()
 
 	if handler == nil {
 		handler = http.DefaultServeMux
@@ -56,7 +61,13 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 
 	// return nil
 
-	defer conn.Close()
+	defer func(conn net.Conn) {
+		err := conn.Close()
+		if err != nil {
+			_ = fmt.Errorf("close connection: %w", err)
+		}
+	}(conn)
+
 	reader := bufio.NewReader(conn)
 	req, err := ParseRequest(reader)
 	if err != nil {
