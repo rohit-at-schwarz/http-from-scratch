@@ -22,7 +22,9 @@ func (r *Response) Header() http.Header {
 	return r.header
 }
 
+// the fmt.Fprintf internally calls this implicitly in the handlers
 func (r *Response) Write(data []byte) (n int, err error) {
+	r.WriteHeader(http.StatusOK)
 	return r.conn.Write(data)
 }
 
@@ -34,9 +36,9 @@ func (r *Response) Write(data []byte) (n int, err error) {
 //	\r\n
 //	hello
 func (r *Response) WriteHeader(statusCode int) {
-	protoCol := "HTTP/1.1"
+	protocol := "HTTP/1.1"
 	statusText := http.StatusText(statusCode)
-	fmt.Fprintf(r.conn, "%s %d %s\r\n", protoCol, statusCode, statusText)
+	fmt.Fprintf(r.conn, "%s %d %s\r\n", protocol, statusCode, statusText)
 
 	if len(r.header) == 0 {
 		fmt.Println("WriteHeader: r.header is empty")
@@ -48,5 +50,4 @@ func (r *Response) WriteHeader(statusCode int) {
 	}
 
 	fmt.Fprintf(r.conn, "\r\n")
-
 }
