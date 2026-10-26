@@ -1,6 +1,7 @@
 package myHttp
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,28 +38,40 @@ func ListenAndServe(addr string, handler http.Handler) error {
 }
 
 func HandleConnection(conn net.Conn, mux http.Handler) error {
-	defer conn.Close()
+	// defer conn.Close()
+	// buffer := make([]byte, 1024)
+	// n, err := conn.Read(buffer)
+	// if err != nil {
+	// 	return fmt.Errorf("read %w", err)
+	// }
 
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
+	// fmt.Println("\nBuffer slice (dec):")
+	// fmt.Println(buffer[:n])
+
+	// fmt.Println("\nBuffer slice (hex):")
+	// fmt.Printf("% x\n", buffer[:n])
+
+	// fmt.Println("\nBuffer slice (string)")
+	// fmt.Print(string(buffer[:n]))
+
+	// return nil
+
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	req, err := ParseRequest(reader)
 	if err != nil {
-		return fmt.Errorf("read %w", err)
+		return fmt.Errorf("parse request: %w", err)
 	}
 
-	fmt.Println("\nBuffer slice (dec):")
-	fmt.Println(buffer[:n])
+	fmt.Printf("Request parsed as: %s %s %s\n", req.Method, req.URL.Path, req.Proto)
+	fmt.Printf("Host received: %s\n", req.Host)
+	fmt.Println("Headers received:")
+	for k, v := range req.Header {
+		fmt.Printf("\t%s: %v\n", k, v)
+	}
 
-	fmt.Println("\nBuffer slice (hex):")
-	fmt.Printf("% x\n", buffer[:n])
-
-	fmt.Println("\nBuffer slice (string)")
-	fmt.Print(string(buffer[:n]))
+	response := NewResponse(conn)
+	mux.ServeHTTP(response, req)
 
 	return nil
-
-	/*
-			Functions that might be useful:
-			* ParseRequest()
-		  * mux.ServeHTTP()
-	*/
 }

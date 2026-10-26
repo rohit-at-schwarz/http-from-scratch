@@ -61,6 +61,8 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 		request.Header.Add(currKey, currVal)
 	}
 
-	//request.Host = request.Header.Get("Host")
+	//apparently the router and any standard middleware expect req.Host to be
+	//populated so they can route requests based on the domain
+	request.Host = request.Header.Get("Host")
 	return request, nil
 }
