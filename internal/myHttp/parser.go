@@ -1,4 +1,4 @@
-package http1
+package myHttp
 
 import (
 	"bufio"
@@ -61,5 +61,6 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 		request.Header.Add(currKey, currVal)
 	}
 
+	//request.Host = request.Header.Get("Host")
 	return request, nil
 }

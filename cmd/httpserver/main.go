@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	myHttp "httpServer/internal/http1"
+	"httpServer/internal/myHttp"
 	"net/http"
 )
 

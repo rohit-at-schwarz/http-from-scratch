@@ -1,4 +1,4 @@
-package http1
+package myHttp
 
 import (
 	"net"
