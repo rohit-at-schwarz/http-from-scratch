@@ -19,7 +19,7 @@ func NewResponse(conn net.Conn) *Response {
 }
 
 func (r *Response) Header() http.Header {
-	return r.Header()
+	return r.header
 }
 
 func (r *Response) Write(data []byte) (n int, err error) {
