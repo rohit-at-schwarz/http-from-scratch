@@ -57,14 +57,13 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 	for {
 		req, err := ParseRequest(reader)
 		if err != nil {
-			//if EOF signal has been received, we can return
-			//early from here since there is nothing more to
-			//process
+			//return early since there is nothing more left to process
 			if errors.Is(err, io.EOF) {
 				return nil
 			}
 
-			return fmt.Errorf("parse request: %w", err)
+			respondWithError(conn, http.StatusBadRequest)
+			return nil
 		}
 
 		fmt.Printf("Request parsed as: %s %s %s\n", req.Method, req.URL.Path, req.Proto)
@@ -72,6 +71,12 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 		fmt.Println("Headers received:")
 		for k, v := range req.Header {
 			fmt.Printf("\t%s: %v\n", k, v)
+		}
+
+		status, ok := validateHTTPVersion(req.Proto)
+		if !ok {
+			respondWithError(conn, status)
+			return nil //close connection after 4xx/5xx protocol error
 		}
 
 		response := NewResponse(conn)
@@ -92,4 +97,11 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 	}
 
 	return nil
+}
+
+func respondWithError(conn net.Conn, statusCode int) {
+	resp := NewResponse(conn)
+	resp.Header().Set("Connection", "close")
+	resp.WriteHeader(statusCode)
+	_ = resp.complete(http.MethodGet)
 }

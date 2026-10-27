@@ -47,6 +47,41 @@ func shouldKeepConnAlive(protocol string, header http.Header) bool {
 	}
 }
 
+func validateHTTPVersion(protocol string) (statusCode int, ok bool) {
+	if !strings.HasPrefix(protocol, "HTTP/") {
+		return http.StatusBadRequest, false
+	}
+
+	//HTTP/1.1, HTTP/1.0, HTTP/0.9, HTTP/3.0 ...
+	ver := strings.TrimPrefix(protocol, "HTTP/")
+	chunks := strings.Split(ver, ".")
+	if len(chunks) != 2 {
+		return http.StatusBadRequest, false
+	}
+
+	for _, chunk := range chunks {
+		if len(chunk) == 0 {
+			return http.StatusBadRequest, false
+		}
+
+		for i := 0; i < len(chunk); i++ {
+			if chunk[i] < '0' || chunk[i] > '9' {
+				return http.StatusBadRequest, false
+			}
+		}
+	}
+
+	major, _ := strconv.Atoi(chunks[0])
+	minor, _ := strconv.Atoi(chunks[1])
+
+	//we support HTTP/1.0 and HTTP/1.1 for now
+	if (major == 1 && minor == 0) || (major == 1 && minor == 1) {
+		return http.StatusOK, true
+	}
+
+	return http.StatusHTTPVersionNotSupported, false
+}
+
 func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	ln, err := reader.ReadString('\n')
 	if err != nil {
