@@ -77,6 +77,15 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 		response := NewResponse(conn)
 		mux.ServeHTTP(response, req)
 
+		//we need to flush the response to the wire with a proper framing of the Content-Length
+		//after the handler is done executing to not have a deadlock between the client
+		//and the server where the client waits for EOF, but the server waits for
+		//the next request from the client, and they keep waiting forever on each others input
+		err = response.complete(req.Method)
+		if err != nil {
+			return fmt.Errorf("finish response: %w", err)
+		}
+
 		if !shouldKeepConnAlive(req.Proto, req.Header) {
 			break
 		}
