@@ -26,7 +26,7 @@
 //   - HandleConnection returns nil when the connection ends cleanly, either
 //     because the client disconnected (EOF) or because the server closed it
 //     intentionally after sending a response.
-package http1
+package myHttp
 
 import (
 	"bufio"

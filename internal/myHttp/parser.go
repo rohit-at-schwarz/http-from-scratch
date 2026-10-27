@@ -2,15 +2,56 @@ package myHttp
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
+const (
+	intentUnspecified = iota // 0: client didn't send a Connection header
+	intentToKeepAlive        // 1: client explicitly sent "keep-alive"
+	intentToClose            // 2: client explicitly sent "close"
+)
+
+func shouldKeepConnAlive(protocol string, header http.Header) bool {
+	intent := intentUnspecified
+
+	// GET /hello HTTP/1.1
+	// Host: example.com
+	// Connection: keep-alive, close
+	for _, v := range header.Values("Connection") {
+		for part := range strings.SplitSeq(v, ",") {
+			part = strings.TrimSpace(strings.ToLower(part))
+			switch part {
+			case "close":
+				intent = intentToClose
+			case "keep-alive":
+				if intent != intentToClose {
+					intent = intentToKeepAlive
+				}
+			}
+		}
+	}
+
+	switch protocol {
+	case "HTTP/1.1":
+		return intent != intentToClose //stays open by default, unless the intent was to close
+	case "HTTP/1.0":
+		return intent == intentToKeepAlive //closes by default, unless the intent was to keep-alive
+	default:
+		return false
+	}
+}
+
 func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	ln, err := reader.ReadString('\n')
 	if err != nil {
+		if errors.Is(err, io.EOF) && len(ln) == 0 {
+			return nil, io.EOF
+		}
 		return nil, fmt.Errorf("failed to read the request line: %w", err)
 	}
 
