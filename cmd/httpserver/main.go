@@ -22,7 +22,9 @@ func main() {
 	store := NewUserStore()
 	_, _ = store.Add("Alice")
 	_, _ = store.Add("Bob")
-	http.HandleFunc("/users", usersHandler(store))
+	http.HandleFunc("/users", usersCollectionHandler(store))
+	http.HandleFunc("/users/", userDetailHandler(store))
+	http.HandleFunc("/health", healthHandler())
 
 	if err := myHttp.ListenAndServe(addr, nil); err != nil {
 		panic(err)
