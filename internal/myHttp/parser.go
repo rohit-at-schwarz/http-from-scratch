@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -105,5 +106,18 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	//apparently the router and any standard middleware expect req.Host to be
 	//populated so they can route requests based on the domain
 	request.Host = request.Header.Get("Host")
+
+	clVal := request.Header.Get("Content-Length")
+	if clVal != "" {
+		cl, err := strconv.ParseInt(clVal, 10, 64)
+		if err != nil || cl < 0 {
+			return nil, fmt.Errorf("invalid Content-Length: %q", clVal)
+		}
+		request.ContentLength = cl
+		request.Body = io.NopCloser(io.LimitReader(reader, cl))
+	} else {
+		request.Body = http.NoBody
+	}
+
 	return request, nil
 }
