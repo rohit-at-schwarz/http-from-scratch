@@ -62,16 +62,22 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 				return nil
 			}
 
+			httpErr, ok := errors.AsType[*HTTPError](err)
+			if ok {
+				respondWithError(conn, httpErr.StatusCode)
+				return nil
+			}
+
 			respondWithError(conn, http.StatusBadRequest)
 			return nil
 		}
 
-		fmt.Printf("Request parsed as: %s %s %s\n", req.Method, req.URL.Path, req.Proto)
-		fmt.Printf("Host received: %s\n", req.Host)
-		fmt.Println("Headers received:")
-		for k, v := range req.Header {
-			fmt.Printf("\t%s: %v\n", k, v)
-		}
+		// fmt.Printf("Request parsed as: %s %s %s\n", req.Method, req.URL.Path, req.Proto)
+		// fmt.Printf("Host received: %s\n", req.Host)
+		// fmt.Println("Headers received:")
+		// for k, v := range req.Header {
+		// 	fmt.Printf("\t%s: %v\n", k, v)
+		// }
 
 		status, ok := validateHTTPVersion(req.Proto)
 		if !ok {

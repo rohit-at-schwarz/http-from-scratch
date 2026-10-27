@@ -17,6 +17,12 @@ const (
 	intentToClose            // 2: client explicitly sent "close"
 )
 
+const (
+	maxRequestLineLen = 8192 //RFC 9112 allows rejecting oversized URIs with 414/400
+	maxHeaderLineLen  = 8192
+	maxHeaderCount    = 100
+)
+
 func shouldKeepConnAlive(protocol string, header http.Header) bool {
 	intent := intentUnspecified
 
@@ -91,17 +97,21 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 		return nil, fmt.Errorf("failed to read the request line: %w", err)
 	}
 
+	if len(ln) > maxRequestLineLen {
+		return nil, newHTTPError(http.StatusRequestURITooLong, "request line too long")
+	}
+
 	//this will give us something like this 'GET /hello HTTP/1.1' from 'GET /hello HTTP/1.1\r\n'
 	ln = strings.TrimRight(ln, "\r\n")
 	subStrings := strings.Split(ln, " ")
-	if len(subStrings) != 3 {
-		return nil, fmt.Errorf("malformed request line: %q", ln)
+	if len(subStrings) != 3 || subStrings[0] == "" || subStrings[1] == "" || subStrings[2] == "" {
+		return nil, newHTTPError(http.StatusBadRequest, "malformed request line")
 	}
 
 	method, rawURI, protocol := subStrings[0], subStrings[1], subStrings[2]
 	parsedURL, err := url.ParseRequestURI(rawURI)
 	if err != nil {
-		return nil, fmt.Errorf("invalid request URI: %w", err)
+		return nil, newHTTPError(http.StatusBadRequest, "invalid request URI")
 	}
 
 	request := &http.Request{
@@ -112,13 +122,18 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 		RequestURI: rawURI,
 	}
 
-	//now that we have the first line parsed already, we can parse the read of the lines
+	//now that we have the first line parsed already, we can parse the rest of the lines
 	//as well in a for loop, since all of them have the same structure of 1 entry per line
 	//and a format of <key>: <val>, we can use deterministic parsing here to get all the headers
+	headerCount := 0
 	for {
 		currHeaderLn, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, fmt.Errorf("failed to read header line: %w", err)
+			return nil, newHTTPError(http.StatusBadRequest, "truncated headers")
+		}
+
+		if len(currHeaderLn) > maxHeaderLineLen {
+			return nil, newHTTPError(http.StatusRequestHeaderFieldsTooLarge, "header line too long")
 		}
 
 		currHeaderLn = strings.TrimRight(currHeaderLn, "\r\n")
@@ -127,9 +142,15 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 			break
 		}
 
+		headerCount++
+		if headerCount > maxHeaderCount {
+			return nil, newHTTPError(http.StatusRequestHeaderFieldsTooLarge, "too many headers")
+		}
+
 		idxCol := strings.IndexByte(currHeaderLn, ':')
-		if idxCol == -1 {
-			return nil, fmt.Errorf("malformed header: %q", currHeaderLn)
+		//field name cannot be empty, start with a colon, or contain spaces
+		if idxCol <= 0 || strings.ContainsAny(currHeaderLn[:idxCol], " \t") {
+			return nil, newHTTPError(http.StatusBadRequest, "malformed header field name")
 		}
 
 		currKey := strings.TrimSpace(currHeaderLn[0:idxCol])
@@ -142,14 +163,26 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	//populated so they can route requests based on the domain
 	request.Host = request.Header.Get("Host")
 
-	clVal := request.Header.Get("Content-Length")
-	if clVal != "" {
-		cl, err := strconv.ParseInt(clVal, 10, 64)
-		if err != nil || cl < 0 {
-			return nil, fmt.Errorf("invalid Content-Length: %q", clVal)
+	te := strings.ToLower(request.Header.Get("Transfer-Encoding"))
+	hasChunked := strings.Contains(te, "chunked")
+	clValues := request.Header.Values("Content-Length")
+	if len(clValues) > 0 {
+		//multiple identical values are valid but conflicting vals return 400 Bad Request.
+		firstVal := strings.TrimSpace(clValues[0])
+		for _, v := range clValues[1:] {
+			if strings.TrimSpace(v) != firstVal {
+				return nil, newHTTPError(http.StatusBadRequest, "conflicting Content-Length values")
+			}
 		}
-		request.ContentLength = cl
-		request.Body = io.NopCloser(io.LimitReader(reader, cl))
+
+		if !hasChunked {
+			cl, err := strconv.ParseInt(firstVal, 10, 64)
+			if err != nil || cl < 0 {
+				return nil, newHTTPError(http.StatusBadRequest, "invalid Content-Length value")
+			}
+			request.ContentLength = cl
+			request.Body = io.NopCloser(io.LimitReader(reader, cl))
+		}
 	} else {
 		request.Body = http.NoBody
 	}
