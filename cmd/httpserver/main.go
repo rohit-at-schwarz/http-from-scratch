@@ -19,6 +19,11 @@ func main() {
 		fmt.Fprintf(w, "hello")
 	})
 
+	store := NewUserStore()
+	_, _ = store.Add("Alice")
+	_, _ = store.Add("Bob")
+	http.HandleFunc("/users", usersHandler(store))
+
 	if err := myHttp.ListenAndServe(addr, nil); err != nil {
 		panic(err)
 	}
