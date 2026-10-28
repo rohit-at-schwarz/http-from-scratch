@@ -24,6 +24,40 @@ const (
 	maxHeaderCount    = 100
 )
 
+type chunkedBody struct {
+	chunked     io.Reader
+	src         *bufio.Reader
+	trailerRead bool
+}
+
+func (b *chunkedBody) Read(p []byte) (int, error) {
+	n, err := b.chunked.Read(p)
+	if errors.Is(err, io.EOF) && !b.trailerRead {
+		b.trailerRead = true
+		if trailerErr := skipTrailerSection(b.src); trailerErr != nil {
+			return n, trailerErr
+		}
+	}
+
+	return n, err
+}
+
+func skipTrailerSection(src *bufio.Reader) error {
+	for {
+		ln, err := src.ReadString('\n')
+		if err != nil {
+			return io.ErrUnexpectedEOF
+		}
+		if !strings.HasSuffix(ln, "\r\n") {
+			return errors.New("trailer line not terminated by CLRF")
+		}
+
+		if ln == "\r\n" {
+			return nil
+		}
+	}
+}
+
 func shouldKeepConnAlive(protocol string, header http.Header) bool {
 	intent := intentUnspecified
 
@@ -89,12 +123,45 @@ func validateHTTPVersion(protocol string) (statusCode int, ok bool) {
 	return http.StatusHTTPVersionNotSupported, false
 }
 
+func isToken(str string) bool {
+	if str == "" {
+		return false
+	}
+
+	for i := 0; i < len(str); i++ {
+		c := str[i]
+		isAlphaNumeric := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		if !isAlphaNumeric && strings.IndexByte("!#$%&*+-_.'^|~`", c) < 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isValidFieldValue(str string) bool {
+	for i := 0; i < len(str); i++ {
+		c := str[i]
+		if (c < 0x20 && c != '\t') || c == 0x7f {
+			return false
+		}
+	}
+
+	return true
+}
+
 func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	ln, err := reader.ReadString('\n')
 	if err != nil {
-		if errors.Is(err, io.EOF) && len(ln) == 0 {
-			return nil, io.EOF
+		if errors.Is(err, io.EOF) {
+			//the client simply closed the connection so this isnt an issue
+			if len(ln) == 0 {
+				return nil, io.EOF
+			}
+
+			return nil, newHTTPError(http.StatusBadRequest, "truncated request ln")
 		}
+
 		return nil, fmt.Errorf("failed to read the request line: %w", err)
 	}
 
@@ -137,7 +204,7 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 			return nil, newHTTPError(http.StatusRequestHeaderFieldsTooLarge, "header line too long")
 		}
 
-		currHeaderLn = strings.TrimRight(currHeaderLn, "\r\n")
+		currHeaderLn = strings.TrimSuffix(currHeaderLn, "\r\n")
 		if currHeaderLn == "" {
 			//empty line means the header section is done (\r\n\r\n reached)
 			break
@@ -150,14 +217,21 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 
 		idxCol := strings.IndexByte(currHeaderLn, ':')
 		//field name cannot be empty, start with a colon, or contain spaces
-		if idxCol <= 0 || strings.ContainsAny(currHeaderLn[:idxCol], " \t") {
+		if idxCol <= 0 || !isToken(currHeaderLn[:idxCol]) {
 			return nil, newHTTPError(http.StatusBadRequest, "malformed header field name")
 		}
 
 		currKey := strings.TrimSpace(currHeaderLn[0:idxCol])
-		currVal := strings.TrimSpace(currHeaderLn[idxCol+1:])
+		currVal := strings.Trim(currHeaderLn[idxCol+1:], " \t")
+		if !isValidFieldValue(currVal) {
+			return nil, newHTTPError(http.StatusBadRequest, "malformed header field value")
+		}
 
 		request.Header.Add(currKey, currVal)
+	}
+
+	if protocol == "HTTP/1.1" && len(request.Header.Values("Host")) == 0 {
+		return nil, newHTTPError(http.StatusBadRequest, "missing Host Headers")
 	}
 
 	//apparently the router and any standard middleware expect req.Host to be
@@ -188,7 +262,7 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	if isChunked {
 		request.TransferEncoding = []string{"chunked"}
 		request.ContentLength = -1
-		request.Body = io.NopCloser(httputil.NewChunkedReader(reader))
+		request.Body = io.NopCloser(&chunkedBody{chunked: httputil.NewChunkedReader(reader), src: reader})
 	} else if len(clValues) > 0 {
 		firstVal := strings.TrimSpace(clValues[0])
 		cl, err := strconv.ParseInt(firstVal, 10, 64)
