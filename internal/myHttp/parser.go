@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -18,7 +19,7 @@ const (
 )
 
 const (
-	maxRequestLineLen = 8192 //RFC 9112 allows rejecting oversized URIs with 414/400
+	maxRequestLineLen = 8192
 	maxHeaderLineLen  = 8192
 	maxHeaderCount    = 100
 )
@@ -163,26 +164,39 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 	//populated so they can route requests based on the domain
 	request.Host = request.Header.Get("Host")
 
-	te := strings.ToLower(request.Header.Get("Transfer-Encoding"))
-	hasChunked := strings.Contains(te, "chunked")
 	clValues := request.Header.Values("Content-Length")
 	if len(clValues) > 0 {
-		//multiple identical values are valid but conflicting vals return 400 Bad Request.
 		firstVal := strings.TrimSpace(clValues[0])
 		for _, v := range clValues[1:] {
 			if strings.TrimSpace(v) != firstVal {
 				return nil, newHTTPError(http.StatusBadRequest, "conflicting Content-Length values")
 			}
 		}
+	}
 
-		if !hasChunked {
-			cl, err := strconv.ParseInt(firstVal, 10, 64)
-			if err != nil || cl < 0 {
-				return nil, newHTTPError(http.StatusBadRequest, "invalid Content-Length value")
+	isChunked := false
+	for _, v := range request.Header.Values("Transfer-Encoding") {
+		for _, enc := range strings.Split(v, ",") {
+			if strings.EqualFold(strings.TrimSpace(enc), "chunked") {
+				isChunked = true
+				break
 			}
-			request.ContentLength = cl
-			request.Body = io.NopCloser(io.LimitReader(reader, cl))
 		}
+	}
+
+	//Transfer-Encoding takes precedence over Content-Length
+	if isChunked {
+		request.TransferEncoding = []string{"chunked"}
+		request.ContentLength = -1
+		request.Body = io.NopCloser(httputil.NewChunkedReader(reader))
+	} else if len(clValues) > 0 {
+		firstVal := strings.TrimSpace(clValues[0])
+		cl, err := strconv.ParseInt(firstVal, 10, 64)
+		if err != nil || cl < 0 {
+			return nil, newHTTPError(http.StatusBadRequest, "invalid Content-Length value")
+		}
+		request.ContentLength = cl
+		request.Body = io.NopCloser(io.LimitReader(reader, cl))
 	} else {
 		request.Body = http.NoBody
 	}
