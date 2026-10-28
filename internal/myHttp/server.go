@@ -88,6 +88,11 @@ func HandleConnection(conn net.Conn, mux http.Handler) error {
 		response := NewResponse(conn)
 		mux.ServeHTTP(response, req)
 
+		if _, err := io.Copy(io.Discard, req.Body); err != nil {
+			respondWithError(conn, http.StatusBadRequest)
+			return nil
+		}
+
 		//we need to flush the response to the wire with a proper framing of the Content-Length
 		//after the handler is done executing to not have a deadlock between the client
 		//and the server where the client waits for EOF, but the server waits for

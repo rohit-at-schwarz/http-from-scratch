@@ -25,18 +25,46 @@ const (
 )
 
 type chunkedBody struct {
-	chunked     io.Reader
-	src         *bufio.Reader
-	trailerRead bool
+	chunked io.Reader
+	src     *bufio.Reader
+
+	err error
+}
+
+type contentLengthBody struct {
+	src *bufio.Reader
+	rem int64
 }
 
 func (b *chunkedBody) Read(p []byte) (int, error) {
+	if b.err != nil {
+		return 0, b.err
+	}
+
 	n, err := b.chunked.Read(p)
-	if errors.Is(err, io.EOF) && !b.trailerRead {
-		b.trailerRead = true
+	if errors.Is(err, io.EOF) {
 		if trailerErr := skipTrailerSection(b.src); trailerErr != nil {
-			return n, trailerErr
+			err = trailerErr
 		}
+	}
+
+	b.err = err
+	return n, err
+}
+
+func (b *contentLengthBody) Read(p []byte) (int, error) {
+	if b.rem == 0 {
+		return 0, io.EOF
+	}
+
+	if int64(len(p)) > b.rem {
+		p = p[:b.rem]
+	}
+
+	n, err := b.src.Read(p)
+	b.rem = b.rem - int64(n)
+	if errors.Is(err, io.EOF) {
+		err = io.ErrUnexpectedEOF
 	}
 
 	return n, err
@@ -270,7 +298,7 @@ func ParseRequest(reader *bufio.Reader) (*http.Request, error) {
 			return nil, newHTTPError(http.StatusBadRequest, "invalid Content-Length value")
 		}
 		request.ContentLength = cl
-		request.Body = io.NopCloser(io.LimitReader(reader, cl))
+		request.Body = io.NopCloser(&contentLengthBody{src: reader, rem: cl})
 	} else {
 		request.Body = http.NoBody
 	}
