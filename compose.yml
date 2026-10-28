@@ -8,8 +8,8 @@ services:
     - -promscrape.config=/etc/victoriametrics/scrape.yml
     - -storageDataPath=/victoria-metrics-data
     volumes:
-    - ./deploy/victoriametrics/scrape.yml:etc/victoriametrics/scrape.yml:ro
-    - vmdata:/victoria-metrics-data
+      - ./deploy/victoriametrics/scrape.yml:/etc/victoriametrics/scrape.yml:ro
+      - vmdata:/victoria-metrics-data
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
