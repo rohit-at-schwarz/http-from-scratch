@@ -1,0 +1,17 @@
+services:
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.155.0
+    container_name: victoriametrics
+    ports:
+      - "8428:8428"
+    command:
+    - -promscrape.config=/etc/victoriametrics/scrape.yml
+    - -storageDataPath=/victoria-metrics-data
+    volumes:
+    - ./deploy/victoriametrics/scrape.yml:etc/victoriametrics/scrape.yml:ro
+    - vmdata:/victoria-metrics-data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  vmdata:
