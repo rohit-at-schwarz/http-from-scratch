@@ -22,7 +22,7 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	}()
 
 	if handler == nil {
-		handler = http.DefaultServeMux
+		handler = DefaultRouter
 	}
 
 	for {

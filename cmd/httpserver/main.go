@@ -15,17 +15,17 @@ func main() {
 	//defines the listener to be http.DefaultServeMux so our server does the listening
 	//parsing and forwarding and then the global router takes that parsed request and
 	//does what it needs to do
-	http.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+	myHttp.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "hello")
 	})
 
 	store := NewUserStore()
 	_, _ = store.Add("Alice")
 	_, _ = store.Add("Bob")
-	http.HandleFunc("/users", usersCollectionHandler(store))
-	http.HandleFunc("/users/", userDetailHandler(store))
+	myHttp.HandleFunc("/users", usersCollectionHandler(store))
+	myHttp.HandleFunc("/users/", userDetailHandler(store))
 
-	http.HandleFunc("/health", healthHandler())
+	myHttp.HandleFunc("/health", healthHandler())
 
 	if err := myHttp.ListenAndServe(addr, nil); err != nil {
 		panic(err)
