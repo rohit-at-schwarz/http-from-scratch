@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-http-server
+  labels:
+    app: my-http-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-http-server
+  template:
+    metadata:
+      labels:
+        app: my-http-server
+    spec:
+      containers:
+      - name: my-http-server
+        image: my-http-server:local
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 3
+          periodSeconds: 5
