@@ -21,6 +21,9 @@ func main() {
 
 	myHttp.HandleFunc("/health", healthHandler())
 
+	collector := myHttp.NewMetricsCollector()
+	myHttp.HandleFunc("/metrics", MetricsHandler(collector))
+
 	if err := myHttp.ListenAndServe(addr, nil); err != nil {
 		panic(err)
 	}
