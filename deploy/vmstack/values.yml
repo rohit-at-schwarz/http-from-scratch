@@ -1,0 +1,30 @@
+fullnameOverride: vmks
+
+vmsingle:
+  spec:
+    retentionPeriod: 7d
+    storage:
+      resources:
+        requests:
+          storage: 5Gi
+
+vtsingle:
+  enabled: true
+  spec:
+    retentionPeriod: 7d
+    storage:
+      resources:
+        requests:
+          storage: 5Gi
+
+grafana:
+  adminPassword: admin
+
+# kind binds these control plane components to 127.0.0.1 inside the node, so vmagent cant
+# reach them so scraping them would give targets which are always down, and alerts that always fire
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false

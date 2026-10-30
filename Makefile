@@ -2,8 +2,6 @@ IMAGE_NAME     ?= my-http-server:local
 CLUSTER_NAME   ?= obs-cluster
 CLUSTER_CONFIG ?= kind-config.yml
 
-# ingress-nginx is retired, controller-v1.15.1 (March 2026) is its last release.
-# Fine for a local kind cluster, it just won't get fixes anymore
 INGRESS_NGINX_MANIFEST ?= https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.15.1/deploy/static/provider/kind/deploy.yaml
 
 # release name and namespace are baked into the service names used in k8s/deployment.yml
@@ -24,19 +22,15 @@ cluster:
 	@kind get clusters | grep -q "^$(CLUSTER_NAME)$$" || \
 		kind create cluster --name $(CLUSTER_NAME) --config $(CLUSTER_CONFIG)
 
-# the controller's admission webhook rejects Ingress objects until it is up, so wait for it
 ingress: cluster
 	kubectl apply -f $(INGRESS_NGINX_MANIFEST)
 	kubectl wait --namespace ingress-nginx --for=condition=ready pod \
 		--selector=app.kubernetes.io/component=controller --timeout=180s
 
-# installs or upgrades the VM stack (operator, VMSingle, VMAgent, VTSingle, Grafana, ...),
-# rerun it after changing the values file
 vmstack: cluster
 	helm upgrade --install $(VMSTACK_RELEASE) $(VMSTACK_CHART) --version $(VMSTACK_VERSION) \
 		--namespace $(VMSTACK_NAMESPACE) --create-namespace -f $(VMSTACK_VALUES) --wait --timeout 10m
 
-# installs the stack only if it isn't there yet, so repeated deploys stay fast
 vmstack-once: cluster
 	@helm status $(VMSTACK_RELEASE) --namespace $(VMSTACK_NAMESPACE) >/dev/null 2>&1 || $(MAKE) vmstack
 
