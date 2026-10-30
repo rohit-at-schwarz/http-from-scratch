@@ -1,0 +1,13 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: my-http-server
+  labels:
+    app: my-http-server
+spec:
+  selector:
+    matchLabels:
+      app: my-http-server
+  endpoints:
+  - port: http
+    path: /metrics

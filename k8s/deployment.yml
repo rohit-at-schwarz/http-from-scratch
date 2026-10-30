@@ -21,6 +21,11 @@ spec:
         ports:
         - name: http
           containerPort: 8080
+        env:
+        - name: OTEL_SERVICE_NAME
+          value: my-http-server
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: http://vtsingle-vmks.monitoring.svc:10428/insert/opentelemetry/v1/traces
         livenessProbe:
           httpGet:
             path: /health

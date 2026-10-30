@@ -1,0 +1,12 @@
+.git
+.claude
+.idea
+.vscode
+misc
+k8s
+deploy
+kind-config.yml
+Makefile
+Dockerfile
+.dockerignore
+*.md
