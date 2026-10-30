@@ -16,8 +16,6 @@ func RouteLabel(r *http.Request) string {
 		return "/hello"
 	case path == "/health":
 		return "/health"
-	case path == "metric":
-		return "/metric"
 	case path == "/metrics":
 		return "/metrics"
 	case path == "/users":

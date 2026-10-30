@@ -90,9 +90,13 @@ func usersCollectionHandler(store *UserStore) http.HandlerFunc {
 
 		switch r.Method {
 		case http.MethodGet:
+			_, span := tracer.Start(r.Context(), "UserStore.GetAll")
+			users := store.GetAll()
+			endSpan(span, nil)
+
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(store.GetAll())
+			_ = json.NewEncoder(w).Encode(users)
 
 		case http.MethodPost:
 			var req UserPayload
@@ -103,7 +107,9 @@ func usersCollectionHandler(store *UserStore) http.HandlerFunc {
 				return
 			}
 
+			_, span := tracer.Start(r.Context(), "UserStore.Add")
 			user, err := store.Add(req.Name)
+			endSpan(span, err)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
@@ -140,7 +146,9 @@ func userDetailHandler(store *UserStore) http.HandlerFunc {
 				return
 			}
 
+			_, span := tracer.Start(r.Context(), "UserStore.Update")
 			user, err := store.Update(identifier, req.Name)
+			endSpan(span, err)
 			if err != nil {
 				w.Header().Set("Content-Type", "application/json")
 				if err.Error() == "user not found" {
